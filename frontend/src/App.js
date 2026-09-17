@@ -4,12 +4,15 @@ import axios from 'axios';
 import { getAvailableGames, createRoom, startGame } from './api/games';
 import TicTacToe from './pages/TicTacToe';
 import RussianCheckers from './pages/RussianCheckers';
+import SelectOpponent from './pages/SelectOpponent';
 
 function App() {
   const [games, setGames] = useState([]);
   const [gameId, setGameId] = useState(null);
   const [gameState, setGameState] = useState(null);
   const [gameType, setGameType] = useState(null);
+  const [gameName, setGameName] = useState(null);
+  const [selectingOpponent, setSelectingOpponent] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -37,14 +40,20 @@ function App() {
     }
   }, [loggedIn]);
 
-  const handleStartGame = async (type) => {
+  const handleSelectGame = (type, name) => {
+    setGameType(type);
+    setGameName(name);
+    setSelectingOpponent(true);
+  };
+
+  const handleSelectOpponent = async (opponentId) => {
     try {
-      const roomResponse = await createRoom(type, 2);
+      const roomResponse = await createRoom(gameType, opponentId);
       const roomId = roomResponse.data.id;
       const gameResponse = await startGame(roomId);
       setGameId(gameResponse.data.id);
       setGameState(gameResponse.data.metadata.state);
-      setGameType(type);
+      setSelectingOpponent(false);
     } catch (error) {
       console.error('Ошибка создания игры:', error.response?.data || error.message);
     }
@@ -54,6 +63,8 @@ function App() {
     setGameId(null);
     setGameState(null);
     setGameType(null);
+    setGameName(null);
+    setSelectingOpponent(false);
   };
 
   return (
@@ -72,13 +83,13 @@ function App() {
 
             {!loggedIn && <p style={{ color: 'red' }}>Авторизация...</p>}
 
-            {loggedIn && !gameId && (
+            {loggedIn && !gameId && !selectingOpponent && (
               <>
                 <h2>Доступные игры</h2>
                 {games.map(game => (
                   <div key={game.type} style={{ margin: '10px 0' }}>
                     <button
-                      onClick={() => handleStartGame(game.type)}
+                      onClick={() => handleSelectGame(game.type, game.name)}
                       style={{
                         padding: '10px 20px',
                         backgroundColor: '#6C5CE7',
@@ -93,6 +104,15 @@ function App() {
                   </div>
                 ))}
               </>
+            )}
+
+            {selectingOpponent && (
+              <SelectOpponent
+                gameType={gameType}
+                gameName={gameName}
+                onSelect={handleSelectOpponent}
+                onBack={handleNewGame}
+              />
             )}
 
             {gameId && gameType === 'tictactoe' && (

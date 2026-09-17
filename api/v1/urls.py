@@ -3,6 +3,7 @@ from . import games, accounts
 
 urlpatterns = [
     path('auth/login/', accounts.login, name='login'),
+    path('users/', accounts.list_users, name='list_users'),
     path('games/available/', games.available_games, name='available_games'),
     path('games/rooms/create/', games.create_room, name='create_room'),
     path('games/rooms/<int:room_id>/start/', games.start_game, name='start_game'),
