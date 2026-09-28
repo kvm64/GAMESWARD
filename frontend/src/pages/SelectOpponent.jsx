@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers } from '../api/games';
+import { getUsers, createInvitation } from '../api/games';
 
-export default function SelectOpponent({ gameType, gameName, onSelect, onBack }) {
+export default function SelectOpponent({ gameType, gameName, onBack, onInvitationSent }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('Давай сыграем!');
 
   useEffect(() => {
     getUsers()
@@ -16,6 +17,17 @@ export default function SelectOpponent({ gameType, gameName, onSelect, onBack })
         setLoading(false);
       });
   }, []);
+
+  const handleInvite = async (userId) => {
+    try {
+      await createInvitation(userId, gameType, message);
+      if (onInvitationSent) {
+        onInvitationSent();
+      }
+    } catch (error) {
+      console.error('Ошибка создания приглашения:', error.response?.data || error.message);
+    }
+  };
 
   if (loading) return <div>Загрузка пользователей...</div>;
 
@@ -38,6 +50,22 @@ export default function SelectOpponent({ gameType, gameName, onSelect, onBack })
       >
         ← Назад
       </button>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ marginRight: '10px' }}>Сообщение:</label>
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          style={{
+            padding: '8px',
+            fontSize: '14px',
+            borderRadius: '4px',
+            border: '1px solid #ccc',
+            width: '300px',
+          }}
+        />
+      </div>
 
       {users.length === 0 ? (
         <p style={{ color: '#888' }}>Нет других пользователей</p>
@@ -74,7 +102,7 @@ export default function SelectOpponent({ gameType, gameName, onSelect, onBack })
                 </div>
               </div>
               <button
-                onClick={() => onSelect(user.id)}
+                onClick={() => handleInvite(user.id)}
                 style={{
                   padding: '6px 12px',
                   backgroundColor: '#6C5CE7',
