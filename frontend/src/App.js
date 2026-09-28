@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import axios from 'axios';
-import { getAvailableGames, createRoom, startGame } from './api/games';
+import { getAvailableGames } from './api/games';
 import TicTacToe from './pages/TicTacToe';
 import RussianCheckers from './pages/RussianCheckers';
 import SelectOpponent from './pages/SelectOpponent';
+import Invitations from './pages/Invitations';
+import Login from './pages/Login';
 
 function App() {
   const [games, setGames] = useState([]);
@@ -13,32 +14,42 @@ function App() {
   const [gameType, setGameType] = useState(null);
   const [gameName, setGameName] = useState(null);
   const [selectingOpponent, setSelectingOpponent] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [view, setView] = useState('main');
+  const [user, setUser] = useState(null);
 
+  // Проверяем, есть ли сохранённый пользователь
   useEffect(() => {
-    const autoLogin = async () => {
-      try {
-        const response = await axios.post('/api/v1/auth/login/', {
-          username: 'admin',
-          password: 'admin123',
-        });
-        localStorage.setItem('access_token', response.data.access);
-        setLoggedIn(true);
-        console.log('Авторизован:', response.data.user.username);
-      } catch (error) {
-        console.error('Ошибка авторизации:', error.response?.data || error.message);
-      }
-    };
-    autoLogin();
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
   }, []);
 
+  // Загружаем игры, когда пользователь авторизован
   useEffect(() => {
-    if (loggedIn) {
+    if (user) {
       getAvailableGames()
         .then(response => setGames(response.data))
         .catch(error => console.error('Ошибка:', error));
     }
-  }, [loggedIn]);
+  }, [user]);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setGameId(null);
+    setGameState(null);
+    setGameType(null);
+    setGameName(null);
+    setSelectingOpponent(false);
+    setView('main');
+  };
 
   const handleSelectGame = (type, name) => {
     setGameType(type);
@@ -46,17 +57,25 @@ function App() {
     setSelectingOpponent(true);
   };
 
-  const handleSelectOpponent = async (opponentId) => {
-    try {
-      const roomResponse = await createRoom(gameType, opponentId);
-      const roomId = roomResponse.data.id;
-      const gameResponse = await startGame(roomId);
-      setGameId(gameResponse.data.id);
-      setGameState(gameResponse.data.metadata.state);
-      setSelectingOpponent(false);
-    } catch (error) {
-      console.error('Ошибка создания игры:', error.response?.data || error.message);
-    }
+  const handleInvitationSent = () => {
+    setSelectingOpponent(false);
+    setView('invitations');
+    alert('Приглашение отправлено!');
+  };
+
+  const handleGameStarted = (newGameType, newGameId, roomId) => {
+    setGameType(newGameType);
+    setGameId(newGameId);
+    setView('main');
+    // Загружаем состояние игры через API
+    fetch(`/api/v1/games/${newGameId}/state/`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      },
+    })
+      .then(res => res.json())
+      .then(data => setGameState(data.state))
+      .catch(error => console.error('Ошибка загрузки игры:', error));
   };
 
   const handleNewGame = () => {
@@ -65,14 +84,61 @@ function App() {
     setGameType(null);
     setGameName(null);
     setSelectingOpponent(false);
+    setView('main');
   };
+
+  // Если пользователь не авторизован — показываем Login
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   return (
     <BrowserRouter>
-      <nav style={{ padding: '10px', backgroundColor: '#6C5CE7', color: 'white' }}>
-        <Link to="/" style={{ color: 'white', marginRight: '15px' }} onClick={handleNewGame}>
-          Главная
-        </Link>
+      <nav style={{
+        padding: '10px',
+        backgroundColor: '#6C5CE7',
+        color: 'white',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <div>
+          <Link to="/" style={{ color: 'white', marginRight: '15px' }} onClick={handleNewGame}>
+            Главная
+          </Link>
+          <button
+            onClick={() => setView('invitations')}
+            style={{
+              color: 'white',
+              backgroundColor: 'transparent',
+              border: '1px solid white',
+              borderRadius: '4px',
+              padding: '5px 10px',
+              cursor: 'pointer',
+              marginRight: '10px',
+            }}
+          >
+            📨 Мои приглашения
+          </button>
+        </div>
+        <div>
+          <span style={{ marginRight: '15px' }}>
+            👤 {user.username}
+          </span>
+          <button
+            onClick={handleLogout}
+            style={{
+              color: 'white',
+              backgroundColor: 'transparent',
+              border: '1px solid white',
+              borderRadius: '4px',
+              padding: '5px 10px',
+              cursor: 'pointer',
+            }}
+          >
+            Выйти
+          </button>
+        </div>
       </nav>
 
       <Routes>
@@ -81,9 +147,11 @@ function App() {
             <h1>GAMESWARD</h1>
             <p>Платформа для настольных игр</p>
 
-            {!loggedIn && <p style={{ color: 'red' }}>Авторизация...</p>}
+            {view === 'invitations' && (
+              <Invitations onGameStarted={handleGameStarted} />
+            )}
 
-            {loggedIn && !gameId && !selectingOpponent && (
+            {view === 'main' && !gameId && !selectingOpponent && (
               <>
                 <h2>Доступные игры</h2>
                 {games.map(game => (
@@ -110,8 +178,8 @@ function App() {
               <SelectOpponent
                 gameType={gameType}
                 gameName={gameName}
-                onSelect={handleSelectOpponent}
                 onBack={handleNewGame}
+                onInvitationSent={handleInvitationSent}
               />
             )}
 
