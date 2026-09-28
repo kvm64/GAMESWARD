@@ -31,6 +31,11 @@ class Invitation(models.Model):
     invitation_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='friendly', verbose_name="Тип приглашения")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
     message = models.TextField(blank=True, verbose_name="Сообщение")
+    
+    # НОВЫЕ поля:
+    time_control = models.CharField(max_length=20, default='unlimited', verbose_name="Контроль времени")
+    color_preference = models.CharField(max_length=10, default='random', verbose_name="Предпочтение цвета")
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     expires_at = models.DateTimeField(null=True, blank=True, verbose_name="Истекает")
     
@@ -41,7 +46,6 @@ class Invitation(models.Model):
         verbose_name = "Приглашение"
         verbose_name_plural = "Приглашения"
         ordering = ['-created_at']
-
 
 class Room(models.Model):
     """Комната для игры двух игроков."""
