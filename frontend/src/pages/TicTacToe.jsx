@@ -12,6 +12,30 @@ export default function TicTacToe({ gameId, initialState }) {
     }
   }, [initialState]);
 
+  // Polling: каждые 2 секунды запрашиваем свежее состояние игры
+  useEffect(() => {
+    if (!gameId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/games/${gameId}/state/`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setState(data.state);
+        }
+      } catch (error) {
+        // Игнорируем сетевые ошибки — просто попробуем в следующий раз
+      }
+    }, 2000);
+
+    // Очищаем интервал при размонтировании компонента
+    return () => clearInterval(interval);
+  }, [gameId]);
+
   const handleCellClick = async (cell) => {
     // Не даём ходить, если игра окончена
     if (state.winner !== null || !state.board.includes('')) {
