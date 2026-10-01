@@ -183,11 +183,12 @@ function App() {
               />
             )}
 
-            {gameId && gameType === 'tictactoe' && (
+            {/* ⬇️ ИЗМЕНЕНО: добавлено && gameState */}
+            {gameId && gameType === 'tictactoe' && gameState && (
               <TicTacToe gameId={gameId} initialState={gameState} />
             )}
 
-            {gameId && gameType === 'russian_checkers' && (
+            {gameId && gameType === 'russian_checkers' && gameState && (
               <RussianCheckers gameId={gameId} initialState={gameState} />
             )}
           </div>

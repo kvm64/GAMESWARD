@@ -142,6 +142,7 @@ def accept_invitation(request, invitation_id):
         'status': 'ok',
         'game_id': game.id,
         'room_id': room.id,
+        'game_type': invitation.game_type,   # ← ДОБАВИТЬ
     })
 
 

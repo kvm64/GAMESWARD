@@ -1,8 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { makeMove } from '../api/games';
 
 export default function TicTacToe({ gameId, initialState }) {
   const [state, setState] = useState(initialState);
+
+  // Синхронизация: если initialState обновился (например, после fetch в App.js),
+  // обновляем локальный state
+  useEffect(() => {
+    if (initialState) {
+      setState(initialState);
+    }
+  }, [initialState]);
 
   const handleCellClick = async (cell) => {
     // Не даём ходить, если игра окончена
