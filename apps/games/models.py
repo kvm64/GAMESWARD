@@ -1,10 +1,9 @@
 from django.db import models
 from django.conf import settings
 
-
 class Invitation(models.Model):
     """Приглашение на игру."""
-    
+
     STATUS_CHOICES = (
         ('pending', 'Ожидает'),
         ('accepted', 'Принято'),
@@ -12,13 +11,13 @@ class Invitation(models.Model):
         ('expired', 'Истекло'),
         ('cancelled', 'Отменено'),
     )
-    
+
     TYPE_CHOICES = (
         ('challenge', 'Вызов на дуэль'),
         ('friendly', 'Дружеская игра'),
         ('tournament', 'Турнирная партия'),
     )
-    
+
     from_user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         related_name='sent_invitations', verbose_name="От кого"
@@ -31,21 +30,31 @@ class Invitation(models.Model):
     invitation_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='friendly', verbose_name="Тип приглашения")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
     message = models.TextField(blank=True, verbose_name="Сообщение")
-    
-    # НОВЫЕ поля:
+
+    # Дополнительные поля
     time_control = models.CharField(max_length=20, default='unlimited', verbose_name="Контроль времени")
     color_preference = models.CharField(max_length=10, default='random', verbose_name="Предпочтение цвета")
-    
+
+    # НОВОЕ: ссылка на созданную комнату (для авто-открытия игры у отправителя)
+    room = models.ForeignKey(
+        'Room',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='invitations',
+        verbose_name="Комната"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
     expires_at = models.DateTimeField(null=True, blank=True, verbose_name="Истекает")
-    
+
     def __str__(self):
         return f"{self.from_user.username} → {self.to_user.username} ({self.get_status_display()})"
-    
+
     class Meta:
+        ordering = ['-created_at']
         verbose_name = "Приглашение"
         verbose_name_plural = "Приглашения"
-        ordering = ['-created_at']
 
 class Room(models.Model):
     """Комната для игры двух игроков."""

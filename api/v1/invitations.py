@@ -19,25 +19,25 @@ def create_invitation(request):
     message = request.data.get('message', '')
     time_control = request.data.get('time_control', 'unlimited')
     color_preference = request.data.get('color_preference', 'random')
-    
+
     if not to_user_id or not game_type:
         return Response(
             {'error': 'Нужны to_user и game_type'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     if int(to_user_id) == request.user.id:
         return Response(
             {'error': 'Нельзя пригласить самого себя'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     # Проверяем, что игра существует
     try:
         GameEngineFactory.get_engine(game_type)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # Создаём приглашение
     invitation = Invitation.objects.create(
         from_user=request.user,
@@ -50,7 +50,7 @@ def create_invitation(request):
         color_preference=color_preference,
         expires_at=timezone.now() + timedelta(hours=24),
     )
-    
+
     return Response(
         InvitationSerializer(invitation).data,
         status=status.HTTP_201_CREATED
@@ -86,14 +86,14 @@ def accept_invitation(request, invitation_id):
         invitation = Invitation.objects.get(id=invitation_id)
     except Invitation.DoesNotExist:
         return Response({'error': 'Приглашение не найдено'}, status=status.HTTP_404_NOT_FOUND)
-    
+
     # Проверяем, что приглашение адресовано текущему пользователю
     if invitation.to_user != request.user:
         return Response({'error': 'Это не ваше приглашение'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     if invitation.status != 'pending':
         return Response({'error': 'Приглашение уже обработано'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     # Определяем цвета
     if invitation.color_preference == 'random':
         import random
@@ -109,7 +109,7 @@ def accept_invitation(request, invitation_id):
     else:  # black
         player_white = invitation.to_user
         player_black = invitation.from_user
-    
+
     # Создаём комнату
     room = Room.objects.create(
         game_type=invitation.game_type,
@@ -118,11 +118,11 @@ def accept_invitation(request, invitation_id):
         status='waiting',
         metadata={'time_control': invitation.time_control},
     )
-    
+
     # Создаём сессию и игру
     engine = GameEngineFactory.get_engine(invitation.game_type)
     initial_state = engine.get_initial_state()
-    
+
     session = Session.objects.create(room=room)
     game = Game.objects.create(
         session=session,
@@ -130,19 +130,20 @@ def accept_invitation(request, invitation_id):
         status='active',
         metadata={'state': initial_state},
     )
-    
+
     room.status = 'active'
     room.save()
-    
-    # Обновляем приглашение
+
+    # Обновляем приглашение: статус + ссылка на комнату
     invitation.status = 'accepted'
+    invitation.room = room              # ← НОВОЕ
     invitation.save()
-    
+
     return Response({
         'status': 'ok',
         'game_id': game.id,
         'room_id': room.id,
-        'game_type': invitation.game_type,   # ← ДОБАВИТЬ
+        'game_type': invitation.game_type,
     })
 
 
@@ -154,19 +155,14 @@ def decline_invitation(request, invitation_id):
         invitation = Invitation.objects.get(id=invitation_id)
     except Invitation.DoesNotExist:
         return Response({'error': 'Приглашение не найдено'}, status=status.HTTP_404_NOT_FOUND)
-    
+
     if invitation.to_user != request.user:
         return Response({'error': 'Это не ваше приглашение'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     if invitation.status != 'pending':
         return Response({'error': 'Приглашение уже обработано'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     invitation.status = 'declined'
     invitation.save()
-    
-    return Response({
-        'status': 'ok',
-        'game_id': game.id,
-        'room_id': room.id,
-        'game_type': invitation.game_type,   # ← ДОБАВЛЕНО
-    })
+
+    return Response({'status': 'ok'})   # ← ИСПРАВЛЕНО
