@@ -100,7 +100,7 @@ def make_move(request, game_id):
     game_over = engine.check_game_over(new_state)
     if game_over['is_over']:
         game.status = 'finished'
-        game.result = game_over.get('winner', 'draw')
+        game.result = game_over.get('winner') or 'draw'
     
     game.save()
     
