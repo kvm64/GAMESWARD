@@ -15,11 +15,11 @@ function App() {
   const [gameState, setGameState] = useState(null);
   const [gameType, setGameType] = useState(null);
   const [gameName, setGameName] = useState(null);
+  const [mySymbol, setMySymbol] = useState(null);
   const [selectingOpponent, setSelectingOpponent] = useState(false);
   const [view, setView] = useState('main');
   const [user, setUser] = useState(null);
 
-  // Проверяем, есть ли сохранённый пользователь
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -27,7 +27,6 @@ function App() {
     }
   }, []);
 
-  // Загружаем игры, когда пользователь авторизован
   useEffect(() => {
     if (user) {
       getAvailableGames()
@@ -36,14 +35,13 @@ function App() {
     }
   }, [user]);
 
-  // Восстанавливаем текущую игру из localStorage при монтировании
+  // Восстановление игры из localStorage
   useEffect(() => {
     const savedGame = localStorage.getItem(CURRENT_GAME_KEY);
     if (savedGame && user) {
       try {
         const { gameId: savedId, gameType: savedType } = JSON.parse(savedGame);
         if (savedId && savedType) {
-          // Загружаем свежее состояние игры
           fetch(`/api/v1/games/${savedId}/state/`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -57,6 +55,7 @@ function App() {
               setGameId(savedId);
               setGameType(savedType);
               setGameState(data.state);
+              setMySymbol(data.my_symbol);
               setView('main');
             })
             .catch(error => {
@@ -71,9 +70,9 @@ function App() {
     }
   }, [user]);
 
-  // Polling исходящих приглашений: если соперник принял — открываем игру
+  // Polling исходящих приглашений
   useEffect(() => {
-    if (!user || gameId) return;  // если уже в игре — не поллим
+    if (!user || gameId) return;
 
     const checkOutgoing = async () => {
       try {
@@ -85,7 +84,6 @@ function App() {
         if (!res.ok) return;
 
         const data = await res.json();
-        // Ищем принятое приглашение с game_id
         const accepted = data.find(
           inv => inv.status === 'accepted' && inv.game_id
         );
@@ -95,12 +93,12 @@ function App() {
           handleGameStarted(accepted.game_type, accepted.game_id, accepted.room_id);
         }
       } catch (error) {
-        // Игнорируем сетевые ошибки
+        // Игнорируем
       }
     };
 
-    const interval = setInterval(checkOutgoing, 3000);  // каждые 3 секунды
-    checkOutgoing();  // сразу при монтировании
+    const interval = setInterval(checkOutgoing, 3000);
+    checkOutgoing();
 
     return () => clearInterval(interval);
   }, [user, gameId]);
@@ -119,6 +117,7 @@ function App() {
     setGameState(null);
     setGameType(null);
     setGameName(null);
+    setMySymbol(null);
     setSelectingOpponent(false);
     setView('main');
   };
@@ -140,21 +139,22 @@ function App() {
     setGameId(newGameId);
     setView('main');
 
-    // Сохраняем игру в localStorage
     localStorage.setItem(CURRENT_GAME_KEY, JSON.stringify({
       gameId: newGameId,
       gameType: newGameType,
       roomId: roomId,
     }));
 
-    // Загружаем состояние игры через API
     fetch(`/api/v1/games/${newGameId}/state/`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
       },
     })
       .then(res => res.json())
-      .then(data => setGameState(data.state))
+      .then(data => {
+        setGameState(data.state);
+        setMySymbol(data.my_symbol);
+      })
       .catch(error => console.error('Ошибка загрузки игры:', error));
   };
 
@@ -163,12 +163,12 @@ function App() {
     setGameState(null);
     setGameType(null);
     setGameName(null);
+    setMySymbol(null);
     setSelectingOpponent(false);
     setView('main');
     localStorage.removeItem(CURRENT_GAME_KEY);
   };
 
-  // Если пользователь не авторизован — показываем Login
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
@@ -280,11 +280,21 @@ function App() {
             )}
 
             {gameId && gameType === 'tictactoe' && gameState && (
-              <TicTacToe gameId={gameId} initialState={gameState} />
+              <TicTacToe
+                gameId={gameId}
+                initialState={gameState}
+                mySymbol={mySymbol}
+                onNewGame={handleNewGame}
+              />
             )}
 
             {gameId && gameType === 'russian_checkers' && gameState && (
-              <RussianCheckers gameId={gameId} initialState={gameState} />
+              <RussianCheckers
+                gameId={gameId}
+                initialState={gameState}
+                mySymbol={mySymbol}
+                onNewGame={handleNewGame}
+              />
             )}
           </div>
         } />

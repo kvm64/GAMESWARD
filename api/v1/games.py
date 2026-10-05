@@ -19,25 +19,25 @@ def create_room(request):
     """Создать комнату для игры."""
     game_type = request.data.get('game_type')
     opponent_id = request.data.get('opponent_id')
-    
+
     if not game_type or not opponent_id:
         return Response(
             {'error': 'Нужны game_type и opponent_id'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     try:
         engine = GameEngineFactory.get_engine(game_type)
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     room = Room.objects.create(
         game_type=game_type,
         player_white=request.user,
         player_black_id=opponent_id,
         status='waiting',
     )
-    
+
     return Response(RoomSerializer(room).data, status=status.HTTP_201_CREATED)
 
 
@@ -48,25 +48,25 @@ def start_game(request, room_id):
         room = Room.objects.get(id=room_id)
     except Room.DoesNotExist:
         return Response({'error': 'Комната не найдена'}, status=status.HTTP_404_NOT_FOUND)
-    
+
     if room.status != 'waiting':
         return Response({'error': 'Игра уже начата'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     engine = GameEngineFactory.get_engine(room.game_type)
     initial_state = engine.get_initial_state()
-    
+
     session = Session.objects.create(room=room)
-    
+
     game = Game.objects.create(
         session=session,
         game_number=1,
         status='active',
         metadata={'state': initial_state},
     )
-    
+
     room.status = 'active'
     room.save()
-    
+
     return Response(GameSerializer(game).data, status=status.HTTP_201_CREATED)
 
 
@@ -77,33 +77,36 @@ def make_move(request, game_id):
         game = Game.objects.get(id=game_id)
     except Game.DoesNotExist:
         return Response({'error': 'Игра не найдена'}, status=status.HTTP_404_NOT_FOUND)
-    
+
     if game.status != 'active':
         return Response({'error': 'Игра не активна'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     move = request.data.get('move')
     if not move:
         return Response({'error': 'Нужен move'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     room = game.session.room
     engine = GameEngineFactory.get_engine(room.game_type)
     state = game.metadata.get('state')
-    
+
     if not engine.validate_move(state, move):
         return Response({'error': 'Недопустимый ход'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     new_state = engine.apply_move(state, move)
-    
+
     game.metadata = {**game.metadata, 'state': new_state}
     game.moves = game.moves + [move]
-    
+
     game_over = engine.check_game_over(new_state)
     if game_over['is_over']:
         game.status = 'finished'
-        game.result = game_over.get('winner') or 'draw'
-    
+        if game_over.get('reason') == 'draw':
+            game.result = 'draw'
+        else:
+            game.result = game_over.get('winner') or 'draw'
+
     game.save()
-    
+
     return Response(GameSerializer(game).data)
 
 
@@ -114,8 +117,21 @@ def get_game_state(request, game_id):
         game = Game.objects.get(id=game_id)
     except Game.DoesNotExist:
         return Response({'error': 'Игра не найдена'}, status=status.HTTP_404_NOT_FOUND)
-    
+
+    room = game.session.room
+
+    # Определяем символ текущего игрока
+    if room.player_white == request.user:
+        my_symbol = 'X'
+    elif room.player_black == request.user:
+        my_symbol = 'O'
+    else:
+        my_symbol = None  # наблюдатель
+
     return Response({
         'game': GameSerializer(game).data,
         'state': game.metadata.get('state'),
+        'my_symbol': my_symbol,
+        'player_white': room.player_white.username,
+        'player_black': room.player_black.username,
     })

@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { makeMove } from '../api/games';
 
-export default function TicTacToe({ gameId, initialState }) {
+export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame }) {
   const [state, setState] = useState(initialState);
+  const [myTurn, setMyTurn] = useState(initialState?.turn === mySymbol);
 
-  // Синхронизация: если initialState обновился (например, после fetch в App.js),
-  // обновляем локальный state
+  // Синхронизация с initialState
   useEffect(() => {
     if (initialState) {
       setState(initialState);
+      setMyTurn(initialState.turn === mySymbol);
     }
-  }, [initialState]);
+  }, [initialState, mySymbol]);
 
-  // Polling: каждые 2 секунды запрашиваем свежее состояние игры
+  // Polling: каждые 2 секунды
   useEffect(() => {
     if (!gameId) return;
 
@@ -26,25 +27,26 @@ export default function TicTacToe({ gameId, initialState }) {
         if (res.ok) {
           const data = await res.json();
           setState(data.state);
+          setMyTurn(data.state.turn === mySymbol);
         }
       } catch (error) {
-        // Игнорируем сетевые ошибки — просто попробуем в следующий раз
+        // Игнорируем
       }
     }, 2000);
 
-    // Очищаем интервал при размонтировании компонента
     return () => clearInterval(interval);
-  }, [gameId]);
+  }, [gameId, mySymbol]);
 
   const handleCellClick = async (cell) => {
-    // Не даём ходить, если игра окончена
     if (state.winner !== null || state.is_draw || !state.board.includes('')) {
       return;
     }
+    if (!myTurn) return;
 
     try {
       const response = await makeMove(gameId, { cell });
       setState(response.data.metadata.state);
+      setMyTurn(response.data.metadata.state.turn === mySymbol);
     } catch (error) {
       console.error('Ошибка хода:', error.response?.data || error.message);
     }
@@ -52,26 +54,43 @@ export default function TicTacToe({ gameId, initialState }) {
 
   if (!state) return <div>Загрузка...</div>;
 
-  // Проверяем, закончилась ли игра
-  // is_draw может прийти с бэкенда, либо определить самим (если board заполнен)
   const isDraw = state.is_draw || (!state.winner && !state.board.includes(''));
   const isGameOver = state.winner !== null || isDraw;
 
   const handleReset = () => {
-    window.location.reload();
+    localStorage.removeItem('currentGame');
+    if (onNewGame) {
+      onNewGame();
+    } else {
+      window.location.reload();
+    }
   };
 
   return (
     <div style={{ padding: '20px' }}>
       <h2>Крестики-нолики</h2>
 
+      <p style={{ fontSize: '14px', color: '#666' }}>
+        Вы играете за: <strong>{mySymbol || '—'}</strong>
+      </p>
+
       {!isGameOver && (
-        <p>Ход: <strong>{state.turn}</strong></p>
+        <p style={{
+          fontSize: '20px',
+          fontWeight: 'bold',
+          color: myTurn ? '#00B894' : '#E17055',
+          padding: '10px',
+          backgroundColor: myTurn ? '#E8F8F5' : '#FFF5F0',
+          borderRadius: '4px',
+          display: 'inline-block',
+        }}>
+          {myTurn ? '🟢 Ваш ход!' : '🔴 Ход соперника...'}
+        </p>
       )}
 
       {state.winner && (
         <p style={{ fontSize: '24px', color: '#6C5CE7', fontWeight: 'bold' }}>
-          🏆 Победитель: {state.winner}
+          🏆 Победитель: {state.winner} {state.winner === mySymbol ? '(Вы!)' : '(Соперник)'}
         </p>
       )}
 
@@ -91,13 +110,13 @@ export default function TicTacToe({ gameId, initialState }) {
           <button
             key={index}
             onClick={() => handleCellClick(index)}
-            disabled={cell !== '' || isGameOver}
+            disabled={cell !== '' || isGameOver || !myTurn}
             style={{
               width: '100px',
               height: '100px',
               fontSize: '36px',
               fontWeight: 'bold',
-              cursor: cell === '' && !isGameOver ? 'pointer' : 'not-allowed',
+              cursor: cell === '' && !isGameOver && myTurn ? 'pointer' : 'not-allowed',
               backgroundColor: cell === 'X' ? '#E3F2FD' : cell === 'O' ? '#FCE4EC' : '#f0f0f0',
               border: '2px solid #6C5CE7',
               borderRadius: '4px',
