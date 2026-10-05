@@ -7,6 +7,8 @@ import SelectOpponent from './pages/SelectOpponent';
 import Invitations from './pages/Invitations';
 import Login from './pages/Login';
 
+const CURRENT_GAME_KEY = 'currentGame';
+
 function App() {
   const [games, setGames] = useState([]);
   const [gameId, setGameId] = useState(null);
@@ -34,6 +36,75 @@ function App() {
     }
   }, [user]);
 
+  // Восстанавливаем текущую игру из localStorage при монтировании
+  useEffect(() => {
+    const savedGame = localStorage.getItem(CURRENT_GAME_KEY);
+    if (savedGame && user) {
+      try {
+        const { gameId: savedId, gameType: savedType } = JSON.parse(savedGame);
+        if (savedId && savedType) {
+          // Загружаем свежее состояние игры
+          fetch(`/api/v1/games/${savedId}/state/`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            },
+          })
+            .then(res => {
+              if (!res.ok) throw new Error('Игра не найдена');
+              return res.json();
+            })
+            .then(data => {
+              setGameId(savedId);
+              setGameType(savedType);
+              setGameState(data.state);
+              setView('main');
+            })
+            .catch(error => {
+              console.error('Не удалось восстановить игру:', error);
+              localStorage.removeItem(CURRENT_GAME_KEY);
+            });
+        }
+      } catch (error) {
+        console.error('Ошибка парсинга currentGame:', error);
+        localStorage.removeItem(CURRENT_GAME_KEY);
+      }
+    }
+  }, [user]);
+
+  // Polling исходящих приглашений: если соперник принял — открываем игру
+  useEffect(() => {
+    if (!user || gameId) return;  // если уже в игре — не поллим
+
+    const checkOutgoing = async () => {
+      try {
+        const res = await fetch('/api/v1/invitations/outgoing/', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        // Ищем принятое приглашение с game_id
+        const accepted = data.find(
+          inv => inv.status === 'accepted' && inv.game_id
+        );
+
+        if (accepted && !gameId) {
+          console.log('Соперник принял приглашение, открываем игру:', accepted);
+          handleGameStarted(accepted.game_type, accepted.game_id, accepted.room_id);
+        }
+      } catch (error) {
+        // Игнорируем сетевые ошибки
+      }
+    };
+
+    const interval = setInterval(checkOutgoing, 3000);  // каждые 3 секунды
+    checkOutgoing();  // сразу при монтировании
+
+    return () => clearInterval(interval);
+  }, [user, gameId]);
+
   const handleLogin = (userData) => {
     setUser(userData);
   };
@@ -42,6 +113,7 @@ function App() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    localStorage.removeItem(CURRENT_GAME_KEY);
     setUser(null);
     setGameId(null);
     setGameState(null);
@@ -67,6 +139,14 @@ function App() {
     setGameType(newGameType);
     setGameId(newGameId);
     setView('main');
+
+    // Сохраняем игру в localStorage
+    localStorage.setItem(CURRENT_GAME_KEY, JSON.stringify({
+      gameId: newGameId,
+      gameType: newGameType,
+      roomId: roomId,
+    }));
+
     // Загружаем состояние игры через API
     fetch(`/api/v1/games/${newGameId}/state/`, {
       headers: {
@@ -85,6 +165,7 @@ function App() {
     setGameName(null);
     setSelectingOpponent(false);
     setView('main');
+    localStorage.removeItem(CURRENT_GAME_KEY);
   };
 
   // Если пользователь не авторизован — показываем Login
@@ -120,6 +201,21 @@ function App() {
           >
             📨 Мои приглашения
           </button>
+          {gameId && (
+            <button
+              onClick={handleNewGame}
+              style={{
+                color: 'white',
+                backgroundColor: 'transparent',
+                border: '1px solid white',
+                borderRadius: '4px',
+                padding: '5px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              🚪 Выйти из игры
+            </button>
+          )}
         </div>
         <div>
           <span style={{ marginRight: '15px' }}>
@@ -183,7 +279,6 @@ function App() {
               />
             )}
 
-            {/* ⬇️ ИЗМЕНЕНО: добавлено && gameState */}
             {gameId && gameType === 'tictactoe' && gameState && (
               <TicTacToe gameId={gameId} initialState={gameState} />
             )}

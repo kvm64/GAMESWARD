@@ -38,7 +38,7 @@ export default function TicTacToe({ gameId, initialState }) {
 
   const handleCellClick = async (cell) => {
     // Не даём ходить, если игра окончена
-    if (state.winner !== null || !state.board.includes('')) {
+    if (state.winner !== null || state.is_draw || !state.board.includes('')) {
       return;
     }
 
@@ -53,7 +53,8 @@ export default function TicTacToe({ gameId, initialState }) {
   if (!state) return <div>Загрузка...</div>;
 
   // Проверяем, закончилась ли игра
-  const isDraw = !state.winner && !state.board.includes('');
+  // is_draw может прийти с бэкенда, либо определить самим (если board заполнен)
+  const isDraw = state.is_draw || (!state.winner && !state.board.includes(''));
   const isGameOver = state.winner !== null || isDraw;
 
   const handleReset = () => {
