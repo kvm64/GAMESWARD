@@ -1,15 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { makeMove, getGameState } from '../api/games';
 
-export default function RussianCheckers({ gameId, initialState }) {
+export default function RussianCheckers({ gameId, initialState, mySymbol, onNewGame }) {
   const [state, setState] = useState(initialState);
   const [selected, setSelected] = useState(null);
+  const [myTurn, setMyTurn] = useState(initialState?.turn === mySymbol);
+  const [errorMessage, setErrorMessage] = useState(null);   // ← НОВОЕ
 
   const isDevMode = process.env.REACT_APP_DEV_MODE === 'true';
 
+  // Автоочистка сообщения через 4 секунды
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
+  // Синхронизация с initialState
+  useEffect(() => {
+    if (initialState) {
+      setState(initialState);
+      setMyTurn(initialState.turn === mySymbol);
+    }
+  }, [initialState, mySymbol]);
+
+  // Polling: каждые 2 секунды
+  useEffect(() => {
+    if (!gameId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await getGameState(gameId);
+        const data = response.data.state;
+        setState(data);
+        setMyTurn(data.turn === mySymbol);
+      } catch (error) {
+        // Игнорируем
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [gameId, mySymbol]);
+
   const handleCellClick = async (row, col) => {
+    if (state.winner !== null || state.is_draw) return;
+    if (!myTurn) return;
+
     const cell = state.board[row][col];
 
+    // Если уже выбрана шашка — пробуем сделать ход
     if (selected) {
       const move = {
         from: [selected.row, selected.col],
@@ -20,6 +60,8 @@ export default function RussianCheckers({ gameId, initialState }) {
         const response = await makeMove(gameId, move);
         const newState = response.data.metadata.state;
         setState(newState);
+        setMyTurn(newState.turn === mySymbol);
+        setErrorMessage(null);   // ← сбрасываем при успехе
 
         if (newState.must_continue && newState.continue_from) {
           setSelected({
@@ -31,11 +73,15 @@ export default function RussianCheckers({ gameId, initialState }) {
         }
       } catch (error) {
         console.error('Ошибка хода:', error.response?.data || error.message);
+        // Показываем сообщение об ошибке
+        const serverError = error.response?.data?.error;
+        setErrorMessage(serverError || 'Недопустимый ход');   // ← НОВОЕ
         setSelected(null);
       }
       return;
     }
 
+    // Если клик по своей шашке — выбираем
     if (cell && cell.color === state.turn) {
       setSelected({ row, col });
     }
@@ -45,19 +91,35 @@ export default function RussianCheckers({ gameId, initialState }) {
     try {
       const response = await getGameState(gameId);
       setState(response.data.state);
+      setMyTurn(response.data.state.turn === mySymbol);
       setSelected(null);
+      setErrorMessage(null);
     } catch (error) {
       console.error('Ошибка обновления:', error.response?.data || error.message);
     }
   };
 
+  const handleNewGame = () => {
+    localStorage.removeItem('currentGame');
+    if (onNewGame) {
+      onNewGame();
+    } else {
+      window.location.reload();
+    }
+  };
+
   if (!state) return <div>Загрузка...</div>;
 
-  const isGameOver = state.winner !== null;
+  const isDraw = state.is_draw;
+  const isGameOver = state.winner !== null || isDraw;
 
   return (
     <div style={{ padding: '20px' }}>
       <h2>Русские шашки</h2>
+
+      <p style={{ fontSize: '14px', color: '#666' }}>
+        Вы играете за: <strong>{mySymbol === 'white' ? 'Белые' : mySymbol === 'black' ? 'Чёрные' : '—'}</strong>
+      </p>
 
       {isDevMode && (
         <button
@@ -77,8 +139,52 @@ export default function RussianCheckers({ gameId, initialState }) {
         </button>
       )}
 
+      {/* Сообщение об ошибке хода */}
+      {errorMessage && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: '#FFE5E5',
+          border: '2px solid #E17055',
+          borderRadius: '4px',
+          color: '#C0392B',
+          fontWeight: 'bold',
+          fontSize: '16px',
+          marginBottom: '15px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          maxWidth: '400px',
+        }}>
+          <span>❌ {errorMessage}</span>
+          <button
+            onClick={() => setErrorMessage(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#C0392B',
+              fontSize: '20px',
+              cursor: 'pointer',
+              marginLeft: '10px',
+              padding: '0 5px',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {!isGameOver && (
-        <p>Ход: <strong>{state.turn === 'white' ? 'Белые' : 'Чёрные'}</strong></p>
+        <p style={{
+          fontSize: '20px',
+          fontWeight: 'bold',
+          color: myTurn ? '#00B894' : '#E17055',
+          padding: '10px',
+          backgroundColor: myTurn ? '#E8F8F5' : '#FFF5F0',
+          borderRadius: '4px',
+          display: 'inline-block',
+        }}>
+          {myTurn ? '🟢 Ваш ход!' : '🔴 Ход соперника...'}
+        </p>
       )}
 
       {selected && (
@@ -100,6 +206,13 @@ export default function RussianCheckers({ gameId, initialState }) {
       {state.winner && (
         <p style={{ fontSize: '24px', color: '#6C5CE7', fontWeight: 'bold' }}>
           🏆 Победитель: {state.winner === 'white' ? 'Белые' : 'Чёрные'}
+          {state.winner === mySymbol ? ' (Вы!)' : ' (Соперник)'}
+        </p>
+      )}
+
+      {isDraw && (
+        <p style={{ fontSize: '24px', color: '#888', fontWeight: 'bold' }}>
+          🤝 Ничья!
         </p>
       )}
 
@@ -168,7 +281,7 @@ export default function RussianCheckers({ gameId, initialState }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      cursor: cell || selected ? 'pointer' : 'default',
+                      cursor: (cell || selected) && !isGameOver && myTurn ? 'pointer' : 'default',
                       position: 'relative',
                     }}
                   >
@@ -230,6 +343,24 @@ export default function RussianCheckers({ gameId, initialState }) {
         </div>
 
       </div>
+
+      {isGameOver && (
+        <button
+          onClick={handleNewGame}
+          style={{
+            marginTop: '20px',
+            padding: '10px 20px',
+            backgroundColor: '#6C5CE7',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '16px',
+          }}
+        >
+          Новая игра
+        </button>
+      )}
 
       <style>
         {`

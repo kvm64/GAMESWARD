@@ -120,18 +120,19 @@ def get_game_state(request, game_id):
 
     room = game.session.room
 
-    # Определяем символ текущего игрока
+    # Определяем символ текущего игрока (универсально для всех игр)
     if room.player_white == request.user:
-        my_symbol = 'X'
+        my_symbol = 'white' if room.game_type == 'russian_checkers' else 'X'
     elif room.player_black == request.user:
-        my_symbol = 'O'
+        my_symbol = 'black' if room.game_type == 'russian_checkers' else 'O'
     else:
-        my_symbol = None  # наблюдатель
+        my_symbol = None
 
     return Response({
         'game': GameSerializer(game).data,
         'state': game.metadata.get('state'),
         'my_symbol': my_symbol,
+        'game_type': room.game_type,
         'player_white': room.player_white.username,
         'player_black': room.player_black.username,
     })
