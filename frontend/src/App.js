@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { getAvailableGames } from './api/games';
 import TicTacToe from './pages/TicTacToe';
 import RussianCheckers from './pages/RussianCheckers';
+import Chess from './pages/Chess';
 import SelectOpponent from './pages/SelectOpponent';
 import Invitations from './pages/Invitations';
 import Login from './pages/Login';
@@ -19,6 +20,8 @@ function App() {
   const [selectingOpponent, setSelectingOpponent] = useState(false);
   const [view, setView] = useState('main');
   const [user, setUser] = useState(null);
+
+  const openedInvitationsRef = useRef(new Set());
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -85,10 +88,13 @@ function App() {
 
         const data = await res.json();
         const accepted = data.find(
-          inv => inv.status === 'accepted' && inv.game_id
+          inv => inv.status === 'accepted'
+            && inv.game_id
+            && !openedInvitationsRef.current.has(inv.id)
         );
 
         if (accepted && !gameId) {
+          openedInvitationsRef.current.add(accepted.id);
           console.log('Соперник принял приглашение, открываем игру:', accepted);
           handleGameStarted(accepted.game_type, accepted.game_id, accepted.room_id);
         }
@@ -120,6 +126,7 @@ function App() {
     setMySymbol(null);
     setSelectingOpponent(false);
     setView('main');
+    openedInvitationsRef.current.clear();
   };
 
   const handleSelectGame = (type, name) => {
@@ -290,6 +297,15 @@ function App() {
 
             {gameId && gameType === 'russian_checkers' && gameState && (
               <RussianCheckers
+                gameId={gameId}
+                initialState={gameState}
+                mySymbol={mySymbol}
+                onNewGame={handleNewGame}
+              />
+            )}
+
+            {gameId && gameType === 'chess' && gameState && (
+              <Chess
                 gameId={gameId}
                 initialState={gameState}
                 mySymbol={mySymbol}

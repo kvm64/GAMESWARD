@@ -121,10 +121,12 @@ def get_game_state(request, game_id):
     room = game.session.room
 
     # Определяем символ текущего игрока (универсально для всех игр)
+    COLORED_GAMES = ['russian_checkers', 'chess']
+
     if room.player_white == request.user:
-        my_symbol = 'white' if room.game_type == 'russian_checkers' else 'X'
+        my_symbol = 'white' if room.game_type in COLORED_GAMES else 'X'
     elif room.player_black == request.user:
-        my_symbol = 'black' if room.game_type == 'russian_checkers' else 'O'
+        my_symbol = 'black' if room.game_type in COLORED_GAMES else 'O'
     else:
         my_symbol = None
 

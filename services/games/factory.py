@@ -1,6 +1,7 @@
 from .base import GameEngine
 from .tictactoe import TicTacToeEngine
 from .russian_checkers import RussianCheckersEngine
+from .chess import ChessEngine
 
 
 class GameEngineFactory:
@@ -12,7 +13,7 @@ class GameEngineFactory:
     _engines = {
         'tictactoe': TicTacToeEngine,
         'russian_checkers': RussianCheckersEngine,
-        # 'chess': ChessEngine,       # будет добавлено позже
+        'chess': ChessEngine,
     }
     
     @classmethod
