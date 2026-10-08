@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { makeMove } from '../api/games';
+import { makeMove, resignGame } from '../api/games';
 
 export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame }) {
   const [state, setState] = useState(initialState);
   const [myTurn, setMyTurn] = useState(initialState?.turn === mySymbol);
+  const [errorMessage, setErrorMessage] = useState(null);
 
-  // Синхронизация с initialState
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
   useEffect(() => {
     if (initialState) {
       setState(initialState);
@@ -13,7 +20,6 @@ export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame })
     }
   }, [initialState, mySymbol]);
 
-  // Polling: каждые 2 секунды
   useEffect(() => {
     if (!gameId) return;
 
@@ -47,8 +53,11 @@ export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame })
       const response = await makeMove(gameId, { cell });
       setState(response.data.metadata.state);
       setMyTurn(response.data.metadata.state.turn === mySymbol);
+      setErrorMessage(null);
     } catch (error) {
       console.error('Ошибка хода:', error.response?.data || error.message);
+      const serverError = error.response?.data?.error;
+      setErrorMessage(serverError || 'Недопустимый ход');
     }
   };
 
@@ -57,12 +66,22 @@ export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame })
   const isDraw = state.is_draw || (!state.winner && !state.board.includes(''));
   const isGameOver = state.winner !== null || isDraw;
 
-  const handleReset = () => {
+  const handleNewGame = () => {
     localStorage.removeItem('currentGame');
     if (onNewGame) {
       onNewGame();
     } else {
       window.location.reload();
+    }
+  };
+
+  const handleResign = async () => {
+    if (!window.confirm('Сдаться? Соперник победит.')) return;
+    try {
+      await resignGame(gameId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Ошибка сдачи:', error.response?.data || error.message);
     }
   };
 
@@ -73,6 +92,39 @@ export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame })
       <p style={{ fontSize: '14px', color: '#666' }}>
         Вы играете за: <strong>{mySymbol || '—'}</strong>
       </p>
+
+      {errorMessage && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: '#FFE5E5',
+          border: '2px solid #E17055',
+          borderRadius: '4px',
+          color: '#C0392B',
+          fontWeight: 'bold',
+          fontSize: '16px',
+          marginBottom: '15px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          maxWidth: '400px',
+        }}>
+          <span>❌ {errorMessage}</span>
+          <button
+            onClick={() => setErrorMessage(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#C0392B',
+              fontSize: '20px',
+              cursor: 'pointer',
+              marginLeft: '10px',
+              padding: '0 5px',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {!isGameOver && (
         <p style={{
@@ -127,23 +179,41 @@ export default function TicTacToe({ gameId, initialState, mySymbol, onNewGame })
         ))}
       </div>
 
-      {isGameOver && (
-        <button
-          onClick={handleReset}
-          style={{
-            marginTop: '20px',
-            padding: '10px 20px',
-            backgroundColor: '#6C5CE7',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '16px',
-          }}
-        >
-          Новая игра
-        </button>
-      )}
+      <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+        {!isGameOver && (
+          <button
+            onClick={handleResign}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#E17055',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            🏳️ Сдаться
+          </button>
+        )}
+
+        {isGameOver && (
+          <button
+            onClick={handleNewGame}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#6C5CE7',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            Новая игра
+          </button>
+        )}
+      </div>
     </div>
   );
 }

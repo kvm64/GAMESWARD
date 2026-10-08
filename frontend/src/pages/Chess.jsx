@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Chess as ChessJS } from 'chess.js';
-import { makeMove } from '../api/games';
+import { makeMove, resignGame } from '../api/games';
 
 export default function Chess({ gameId, initialState, mySymbol, onNewGame }) {
   const [state, setState] = useState(initialState);
@@ -103,6 +103,16 @@ export default function Chess({ gameId, initialState, mySymbol, onNewGame }) {
       onNewGame();
     } else {
       window.location.reload();
+    }
+  };
+
+  const handleResign = async () => {
+    if (!window.confirm('Сдаться? Соперник победит.')) return;
+    try {
+      await resignGame(gameId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Ошибка сдачи:', error.response?.data || error.message);
     }
   };
 
@@ -223,23 +233,41 @@ export default function Chess({ gameId, initialState, mySymbol, onNewGame }) {
         </div>
       )}
 
-      {isGameOver && (
-        <button
-          onClick={handleNewGame}
-          style={{
-            marginTop: '20px',
-            padding: '10px 20px',
-            backgroundColor: '#6C5CE7',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '16px',
-          }}
-        >
-          Новая игра
-        </button>
-      )}
+      <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+        {!isGameOver && (
+          <button
+            onClick={handleResign}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#E17055',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            🏳️ Сдаться
+          </button>
+        )}
+
+        {isGameOver && (
+          <button
+            onClick={handleNewGame}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#6C5CE7',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            Новая игра
+          </button>
+        )}
+      </div>
     </div>
   );
 }

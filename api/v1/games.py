@@ -138,3 +138,35 @@ def get_game_state(request, game_id):
         'player_white': room.player_white.username,
         'player_black': room.player_black.username,
     })
+
+
+@api_view(['POST'])
+def resign_game(request, game_id):
+    """Сдаться в игре."""
+    try:
+        game = Game.objects.get(id=game_id)
+    except Game.DoesNotExist:
+        return Response({'error': 'Игра не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+    if game.status != 'active':
+        return Response({'error': 'Игра уже завершена'}, status=status.HTTP_400_BAD_REQUEST)
+
+    room = game.session.room
+    COLORED_GAMES = ['russian_checkers', 'chess']
+
+    if room.player_white == request.user:
+        winner = 'black' if room.game_type in COLORED_GAMES else 'O'
+    elif room.player_black == request.user:
+        winner = 'white' if room.game_type in COLORED_GAMES else 'X'
+    else:
+        return Response({'error': 'Вы не участник игры'}, status=status.HTTP_403_FORBIDDEN)
+
+    game.status = 'finished'
+    game.result = winner
+    game.save()
+
+    return Response({
+        'status': 'ok',
+        'winner': winner,
+        'reason': 'resign',
+    })

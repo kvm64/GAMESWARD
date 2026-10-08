@@ -31,3 +31,6 @@ export const makeMove = (gameId, move) =>
 
 export const getGameState = (gameId) => 
   client.get(`/games/${gameId}/state/`);
+
+export const resignGame = (gameId) => 
+  client.post(`/games/${gameId}/resign/`);

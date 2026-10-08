@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { makeMove, getGameState } from '../api/games';
+import { makeMove, getGameState, resignGame } from '../api/games';
 
 export default function RussianCheckers({ gameId, initialState, mySymbol, onNewGame }) {
   const [state, setState] = useState(initialState);
   const [selected, setSelected] = useState(null);
   const [myTurn, setMyTurn] = useState(initialState?.turn === mySymbol);
-  const [errorMessage, setErrorMessage] = useState(null);   // ← НОВОЕ
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const isDevMode = process.env.REACT_APP_DEV_MODE === 'true';
 
-  // Автоочистка сообщения через 4 секунды
   useEffect(() => {
     if (errorMessage) {
       const timer = setTimeout(() => setErrorMessage(null), 4000);
@@ -17,7 +16,6 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
     }
   }, [errorMessage]);
 
-  // Синхронизация с initialState
   useEffect(() => {
     if (initialState) {
       setState(initialState);
@@ -25,7 +23,6 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
     }
   }, [initialState, mySymbol]);
 
-  // Polling: каждые 2 секунды
   useEffect(() => {
     if (!gameId) return;
 
@@ -49,7 +46,6 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
 
     const cell = state.board[row][col];
 
-    // Если уже выбрана шашка — пробуем сделать ход
     if (selected) {
       const move = {
         from: [selected.row, selected.col],
@@ -61,7 +57,7 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
         const newState = response.data.metadata.state;
         setState(newState);
         setMyTurn(newState.turn === mySymbol);
-        setErrorMessage(null);   // ← сбрасываем при успехе
+        setErrorMessage(null);
 
         if (newState.must_continue && newState.continue_from) {
           setSelected({
@@ -73,15 +69,13 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
         }
       } catch (error) {
         console.error('Ошибка хода:', error.response?.data || error.message);
-        // Показываем сообщение об ошибке
         const serverError = error.response?.data?.error;
-        setErrorMessage(serverError || 'Недопустимый ход');   // ← НОВОЕ
+        setErrorMessage(serverError || 'Недопустимый ход');
         setSelected(null);
       }
       return;
     }
 
-    // Если клик по своей шашке — выбираем
     if (cell && cell.color === state.turn) {
       setSelected({ row, col });
     }
@@ -105,6 +99,16 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
       onNewGame();
     } else {
       window.location.reload();
+    }
+  };
+
+  const handleResign = async () => {
+    if (!window.confirm('Сдаться? Соперник победит.')) return;
+    try {
+      await resignGame(gameId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Ошибка сдачи:', error.response?.data || error.message);
     }
   };
 
@@ -139,7 +143,6 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
         </button>
       )}
 
-      {/* Сообщение об ошибке хода */}
       {errorMessage && (
         <div style={{
           padding: '12px 16px',
@@ -344,23 +347,41 @@ export default function RussianCheckers({ gameId, initialState, mySymbol, onNewG
 
       </div>
 
-      {isGameOver && (
-        <button
-          onClick={handleNewGame}
-          style={{
-            marginTop: '20px',
-            padding: '10px 20px',
-            backgroundColor: '#6C5CE7',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '16px',
-          }}
-        >
-          Новая игра
-        </button>
-      )}
+      <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+        {!isGameOver && (
+          <button
+            onClick={handleResign}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#E17055',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            🏳️ Сдаться
+          </button>
+        )}
+
+        {isGameOver && (
+          <button
+            onClick={handleNewGame}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#6C5CE7',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+          >
+            Новая игра
+          </button>
+        )}
+      </div>
 
       <style>
         {`
